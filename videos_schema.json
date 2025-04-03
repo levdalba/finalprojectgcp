@@ -1,0 +1,7 @@
+[
+    {"name": "video_id", "type": "STRING", "mode": "NULLABLE"},
+    {"name": "url", "type": "STRING", "mode": "NULLABLE"},
+    {"name": "views", "type": "INT64", "mode": "NULLABLE"},
+    {"name": "thumbnail", "type": "STRING", "mode": "NULLABLE"},
+    {"name": "scrape_timestamp", "type": "TIMESTAMP", "mode": "NULLABLE"}
+  ]
