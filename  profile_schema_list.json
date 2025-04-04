@@ -1,5 +1,4 @@
-{
-  "fields": [
+[
     {"name": "username", "type": "STRING", "mode": "REQUIRED", "description": "TikTok username"},
     {"name": "user_id", "type": "STRING", "mode": "REQUIRED", "description": "Unique user ID"},
     {"name": "actual_name", "type": "STRING", "mode": "NULLABLE", "description": "User's real name"},
@@ -13,4 +12,3 @@
     {"name": "is_verified", "type": "BOOLEAN", "mode": "NULLABLE", "description": "Verification status"},
     {"name": "scrape_timestamp", "type": "TIMESTAMP", "mode": "NULLABLE", "description": "Time of scrape"}
   ]
-}

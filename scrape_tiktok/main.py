@@ -5,33 +5,32 @@ import base64
 import logging
 import time
 
-# Set up logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 @functions_framework.cloud_event
 def scrape_tiktok(cloud_event):
     try:
-        # Extract the TikTok profile URL from the Pub/Sub message
         data = cloud_event.data["message"]["data"]
         profile_url = base64.b64decode(data).decode("utf-8")
         logger.info(f"Scraping profile: {profile_url}")
 
-        # Use ScrapingBee to fetch the page
-        scrapingbee_api_key = "NWGZSCRRH5CM26REU9Q1AEQGHWJH17FYPI4UCW3FU5F3KB9W7S5PXDMK334L8JMHFBS8QLN3PD3HZIP1"  # Replace with your key!
+        scrapingbee_api_key = "NWGZSCRRH5CM26REU9Q1AEQGHWJH17FYPI4UCW3FU5F3KB9W7S5PXDMK334L8JMHFBS8QLN3PD3HZIP1"
         scrapingbee_url = "https://app.scrapingbee.com/api/v1/"
+        scroll_script = "window.scrollTo(0,document.body.scrollHeight);"
+        scroll_script_b64 = base64.b64encode(scroll_script.encode("utf-8")).decode("utf-8")
         params = {
             "api_key": scrapingbee_api_key,
             "url": profile_url,
-            "render_js": "true",  # Ensures TikTok’s JavaScript renders
-            "wait": "2000",       # Wait 2 seconds for full page load
+            "render_js": "true",
+            "wait": "5000",
+            "js_snippet": scroll_script_b64,
         }
         response = requests.get(scrapingbee_url, params=params)
-        response.raise_for_status()  # Throw an error if the request fails
+        response.raise_for_status()
         html_content = response.text
-        logger.info("Successfully fetched page using ScrapingBee.")
+        logger.info("Successfully fetched page using ScrapingBee with scrolling.")
 
-        # Save the HTML to Google Cloud Storage
         storage_client = storage.Client()
         bucket = storage_client.bucket("tiktok-raw-data")
         timestamp = time.strftime("%Y%m%d-%H%M%S")
