@@ -146,38 +146,64 @@ def extract_profile_data_from_html(soup):
 
 # --- Extract Video Data from HTML (Fallback) ---
 def extract_video_data_from_html(soup, username):
-    videos_data = []
+    videos = []
     try:
-        video_containers = soup.find_all("div", {"data-e2e": "user-post-item"})
-        for container in video_containers:
-            try:
-                a_tag = container.find("a")
-                url = a_tag["href"] if a_tag else "N/A"
-                views_tag = container.find("strong", {"data-e2e": "video-views"})
-                views = int(re.sub(r'[^\d]', '', views_tag.text)) if views_tag else 0
-                img_tag = container.find("img")
-                thumbnail = img_tag["src"] if img_tag else "N/A"
-                description = container.find("div", {"data-e2e": "video-desc"})
-                description = description.text.strip() if description else "N/A"
-                videos_data.append({
-                    "url": url,
-                    "views": views,
-                    "thumbnail": thumbnail,
-                    "description": description,
-                    "create_time": "N/A",
-                    "like_count": 0,
-                    "comment_count": 0,
-                    "share_count": 0,
-                    "scrape_timestamp": None
-                })
-            except Exception as e:
-                logger.error(f"Error parsing video container: {e}")
-                continue
-        logger.info(f"Extracted {len(videos_data)} videos from HTML.")
-    except Exception as e:
-        logger.error(f"Error extracting video data from HTML: {e}")
-    return videos_data
+        video_elements = soup.select('div[data-e2e="user-post-item"]')
+        logger.info(f"Found {len(video_elements)} video elements in HTML for {username}")
+        for video_elem in video_elements:
+            # Extract URL
+            url_elem = video_elem.find('a', href=True)
+            url = url_elem['href'] if url_elem else f"https://www.tiktok.com/@{username}/video/unknown"
+            if not url.startswith("https://www.tiktok.com"):
+                url = f"https://www.tiktok.com{url}"
 
+            # Extract Views
+            view_count_elem = video_elem.find('strong', {'data-e2e': 'video-views'})
+            views = 0
+            if view_count_elem:
+                view_text = view_count_elem.text
+                if 'M' in view_text:
+                    views = int(float(view_text.replace('M', '')) * 1000000)
+                elif 'K' in view_text:
+                    views = int(float(view_text.replace('K', '')) * 1000)
+                else:
+                    views = int(view_text)
+
+            # Extract Thumbnail
+            thumbnail_elem = video_elem.find('img')
+            thumbnail = thumbnail_elem['src'] if thumbnail_elem else ""
+
+            # Extract Description
+            description_elem = video_elem.find('h3', {'data-e2e': 'video-desc'}) or video_elem.find('div', {'class': 'tiktok-1itcwxg-DivDescription'})
+            description = description_elem.text.strip() if description_elem else "N/A"
+            logger.info(f"Description for {url}: {description}")
+
+            # Attempt to Extract Likes, Comments, Shares (these might not be available in HTML)
+            stats_elem = video_elem.find('div', {'class': 'tiktok-1g0p768-DivStats'})
+            like_count = 0
+            comment_count = 0
+            share_count = 0
+            if stats_elem:
+                like_elem = stats_elem.find('strong', {'data-e2e': 'like-count'})
+                like_count = int(like_elem.text.replace('M', '000000').replace('K', '000')) if like_elem else 0
+                comment_elem = stats_elem.find('strong', {'data-e2e': 'comment-count'})
+                comment_count = int(comment_elem.text.replace('M', '000000').replace('K', '000')) if comment_elem else 0
+                share_elem = stats_elem.find('strong', {'data-e2e': 'share-count'})
+                share_count = int(share_elem.text.replace('M', '000000').replace('K', '000')) if share_elem else 0
+
+            videos.append({
+                "url": url,
+                "views": views,
+                "thumbnail": thumbnail,
+                "description": description,
+                "create_time": "",  # Still not available in HTML
+                "like_count": like_count,
+                "comment_count": comment_count,
+                "share_count": share_count
+            })
+    except Exception as e:
+        logger.error(f"Error extracting videos from HTML for {username}: {str(e)}")
+    return videos
 @functions_framework.cloud_event
 def process_tiktok_data(cloud_event):
     try:

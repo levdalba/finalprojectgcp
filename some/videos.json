@@ -1,0 +1,13 @@
+{
+    "fields": [
+      {"name": "url", "type": "STRING", "mode": "REQUIRED", "description": "Video URL"},
+      {"name": "views", "type": "INT64", "mode": "NULLABLE", "description": "Number of views"},
+      {"name": "thumbnail", "type": "STRING", "mode": "NULLABLE", "description": "Thumbnail URL"},
+      {"name": "description", "type": "STRING", "mode": "NULLABLE", "description": "Video caption"},
+      {"name": "create_time", "type": "STRING", "mode": "NULLABLE", "description": "Video creation time (N/A currently)"},
+      {"name": "like_count", "type": "INT64", "mode": "NULLABLE", "description": "Number of likes (0 currently)"},
+      {"name": "comment_count", "type": "INT64", "mode": "NULLABLE", "description": "Number of comments (0 currently)"},
+      {"name": "share_count", "type": "INT64", "mode": "NULLABLE", "description": "Number of shares (0 currently)"},
+      {"name": "scrape_timestamp", "type": "TIMESTAMP", "mode": "NULLABLE", "description": "Time of scrape"}
+    ]
+  }
