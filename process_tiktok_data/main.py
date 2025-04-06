@@ -199,11 +199,13 @@ def extract_video_data_from_html(soup, username):
                 "create_time": "",  # Still not available in HTML
                 "like_count": like_count,
                 "comment_count": comment_count,
-                "share_count": share_count
+                "share_count": share_count,
+                "scrape_timestamp": None  # Will be set later
             })
     except Exception as e:
         logger.error(f"Error extracting videos from HTML for {username}: {str(e)}")
     return videos
+
 @functions_framework.cloud_event
 def process_tiktok_data(cloud_event):
     try:
@@ -292,7 +294,7 @@ def process_tiktok_data(cloud_event):
                 bigquery.SchemaField("actual_name", "STRING"),
                 bigquery.SchemaField("following_count", "INTEGER"),
                 bigquery.SchemaField("follower_count", "INTEGER"),
-                bigquery.SchemaField("total_like_count", "STRING"),  # Changed to STRING
+                bigquery.SchemaField("total_like_count", "STRING"),
                 bigquery.SchemaField("caption", "STRING"),
                 bigquery.SchemaField("bio_link", "STRING"),
                 bigquery.SchemaField("bio", "STRING"),
@@ -319,133 +321,6 @@ def process_tiktok_data(cloud_event):
                     bigquery.SchemaField("like_count", "INTEGER"),
                     bigquery.SchemaField("comment_count", "INTEGER"),
                     bigquery.SchemaField("share_count", "INTEGER"),
-                    bigquery.SchemaField("scrape_timestamp", "TIMESTAMP")
-                ]
-            )
-            video_uri = f"gs://{processed_bucket_name}/{video_blob_path}"
-            video_load_job = bq_client.load_table_from_uri(video_uri, video_table_id, job_config=video_job_config)
-            video_load_job.result()
-            if video_load_job.errors:
-                logger.error(f"Errors loading video data: {video_load_job.errors}")
-                raise Exception(f"Failed to load video data: {video_load_job.errors}")
-            logger.info(f"Loaded video data into BigQuery: {video_table_id}")
-
-    except Exception as e:
-        logger.error(f"Error in process_tiktok_data: {str(e)}")
-        raise
-    try:
-        event_data = cloud_event.data
-        bucket_name = event_data["bucket"]
-        file_name = event_data["name"]
-        logger.info(f"Processing file: gs://{bucket_name}/{file_name}")
-
-        # Extract username from file path
-        username = file_name.split("/")[-2]  # e.g., jasonmoments
-
-        # Delete existing data for this username
-        bq_client = bigquery.Client()
-        profile_table_id = "training-triggering-pipeline.tiktok_dataset.profiles"
-        video_table_id = "training-triggering-pipeline.tiktok_dataset.videos"
-        delete_profile_query = f"""
-        DELETE FROM `{profile_table_id}`
-        WHERE username = '{username}'
-        """
-        delete_video_query = f"""
-        DELETE FROM `{video_table_id}`
-        WHERE url LIKE '%@{username}%'
-        """
-        bq_client.query(delete_profile_query).result()
-        bq_client.query(delete_video_query).result()
-        logger.info(f"Deleted existing data for username: {username}")
-
-        # Proceed with processing
-        storage_client = storage.Client()
-        bucket = storage_client.bucket(bucket_name)
-        blob = bucket.blob(file_name)
-        html_content = blob.download_as_text()
-        logger.info("Downloaded HTML file.")
-
-        soup = BeautifulSoup(html_content, "html.parser")
-        script_tag = soup.find("script", id="__UNIVERSAL_DATA_FOR_REHYDRATION__")
-        profile_data = None
-        videos_data = []
-        scrape_timestamp = event_data["timeCreated"]
-
-        if script_tag and script_tag.string:
-            json_data = json.loads(script_tag.string.strip())
-            if "__DEFAULT_SCOPE__" in json_data and "webapp.user-detail" in json_data["__DEFAULT_SCOPE__"]:
-                logger.info("JSON data found, extracting data...")
-                profile_data = extract_profile_data_from_json(json_data)
-                videos_data = extract_video_data_from_json(json_data, profile_data["username"])
-
-        if not profile_data or profile_data["username"] == "N/A":
-            logger.info("Falling back to HTML parsing for profile data.")
-            profile_data = extract_profile_data_from_html(soup)
-
-        if not videos_data:
-            logger.info("Falling back to HTML parsing for video data.")
-            videos_data = extract_video_data_from_html(soup, username)
-
-        # Add scrape timestamp to all records
-        profile_data["scrape_timestamp"] = scrape_timestamp
-        for video in videos_data:
-            video["scrape_timestamp"] = scrape_timestamp
-
-        logger.info(f"Extracted profile data: {profile_data}")
-        logger.info(f"Extracted {len(videos_data)} videos.")
-
-        # Save to GCS
-        processed_bucket_name = "tiktok-processed-data"
-        timestamp = datetime.utcnow().strftime('%Y%m%d-%H%M%S')
-        profile_blob_path = f"profiles/{username}/{timestamp}.json"
-        profile_blob = storage_client.bucket(processed_bucket_name).blob(profile_blob_path)
-        profile_blob.upload_from_string(json.dumps(profile_data), content_type="application/json")
-        logger.info(f"Saved profile data to GCS: {profile_blob_path}")
-
-        if videos_data:
-            video_blob_path = f"videos/{username}/{timestamp}.json"
-            video_blob = storage_client.bucket(processed_bucket_name).blob(video_blob_path)
-            video_content = "\n".join(json.dumps(video) for video in videos_data)  # NDJSON
-            video_blob.upload_from_string(video_content, content_type="application/json")
-            logger.info(f"Saved video data to GCS: {video_blob_path}")
-
-        # Load to BigQuery
-        profile_job_config = bigquery.LoadJobConfig(
-            source_format=bigquery.SourceFormat.NEWLINE_DELIMITED_JSON,
-            write_disposition=bigquery.WriteDisposition.WRITE_APPEND,
-            schema=[
-                bigquery.SchemaField("username", "STRING", "REQUIRED"),
-                bigquery.SchemaField("user_id", "STRING", "REQUIRED"),
-                bigquery.SchemaField("actual_name", "STRING"),
-                bigquery.SchemaField("following_count", "INT64"),
-                bigquery.SchemaField("follower_count", "INT64"),
-                bigquery.SchemaField("total_like_count", "STRING"),
-                bigquery.SchemaField("caption", "STRING"),
-                bigquery.SchemaField("bio_link", "STRING"),
-                bigquery.SchemaField("bio", "STRING"),
-                bigquery.SchemaField("profile_pic_url", "STRING"),
-                bigquery.SchemaField("is_verified", "BOOLEAN"),
-                bigquery.SchemaField("scrape_timestamp", "TIMESTAMP")
-            ]
-        )
-        profile_uri = f"gs://{processed_bucket_name}/{profile_blob_path}"
-        profile_load_job = bq_client.load_table_from_uri(profile_uri, profile_table_id, job_config=profile_job_config)
-        profile_load_job.result()
-        logger.info(f"Loaded profile data into BigQuery: {profile_table_id}")
-
-        if videos_data:
-            video_job_config = bigquery.LoadJobConfig(
-                source_format=bigquery.SourceFormat.NEWLINE_DELIMITED_JSON,
-                write_disposition=bigquery.WriteDisposition.WRITE_APPEND,
-                schema=[
-                    bigquery.SchemaField("url", "STRING", "REQUIRED"),
-                    bigquery.SchemaField("views", "INT64"),
-                    bigquery.SchemaField("thumbnail", "STRING"),
-                    bigquery.SchemaField("description", "STRING"),
-                    bigquery.SchemaField("create_time", "STRING"),
-                    bigquery.SchemaField("like_count", "INT64"),
-                    bigquery.SchemaField("comment_count", "INT64"),
-                    bigquery.SchemaField("share_count", "INT64"),
                     bigquery.SchemaField("scrape_timestamp", "TIMESTAMP")
                 ]
             )
