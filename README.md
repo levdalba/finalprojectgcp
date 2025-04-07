@@ -29,20 +29,30 @@ The objective is to extract valuable insights from TikTok creator data—such as
 3. **Data Storage**
    - Raw HTML saved to GCS
    - Cleaned/structured data loaded into BigQuery
-   - 
+
 4. **Visualization**
    - Connected to BigQuery via Looker Studio
 
 ## 📊 Looker Studio Dashboard Insights
+Access the full dashboard here: [TikTok Analytics Dashboard](https://lookerstudio.google.com/u/0/reporting/cff2d309-6362-4599-8962-43c3370a69d0/page/9doFF/edit)
+
 ### 👥 Followers per Creator
-- Bar chart displaying follower counts
-- Example: @mrbeast leads with 115.2M followers
-- ➤ Total Followers: 357,206,115
+- Bar chart displaying follower counts across different TikTok creators
+- Key insights:
+  - @mrbeast leads with 115.2M followers
+  - @zachking follows with 82.3M followers
+  - @therock has 80.4M followers
+  - Total followers across all tracked creators: 357,206,115
 
 ### ✔️ Verified vs. Non-Verified Creators
-Pie chart showing:
-- Verified: 54.5%
-- Non-Verified: 45.5%
+Pie chart breakdown:
+- Verified creators: 54.5%
+- Non-verified creators: 45.5%
+
+### 📊 Additional Visualizations
+- Scatter plot comparing follower count to like count
+- Performance trends over time
+- Engagement rate analysis
 
 ## 📁 Project Structure
 ```
@@ -159,8 +169,14 @@ gcloud functions logs read scrape_tiktok --limit 50
 gcloud functions logs read process_tiktok_data --limit 50
 ```
 
-### 6. Access the Dashboard
-Open Looker Studio and connect to the BigQuery dataset:
+### 6. Local Development
+```bash
+export SCRAPINGBEE_API_KEY="your_actual_api_key_here"
+functions-framework --target=scrape_tiktok
+```
+
+### 7. Access the Dashboard
+Open [Looker Studio Dashboard](https://lookerstudio.google.com/u/0/reporting/cff2d309-6362-4599-8962-43c3370a69d0/page/9doFF/edit) or connect to the BigQuery dataset:
 - `training-triggering-pipeline.tiktok_dataset.profiles`
 - `training-triggering-pipeline.tiktok_dataset.videos`
 
@@ -183,4 +199,4 @@ Open Looker Studio and connect to the BigQuery dataset:
 ## 🧠 Credits
 Built with ❤️ using Python, BeautifulSoup, and Google Cloud
 
-Special thanks to ScrapingBee for reliable scraping infrastructure
+Author: Levan Dalbashvili
