@@ -16,22 +16,72 @@ The objective is to extract valuable insights from TikTok creator data—such as
 - **Visualization**: Looker Studio for dashboards
 
 ## 🧱 Pipeline Architecture
-1. **Scraping TikTok profiles**
-   - Uses ScrapingBee to fetch profile HTML
-   - Extracts embedded JSON from the DOM using BeautifulSoup and manual DOM inspection
+The TikTok data pipeline is designed as a serverless, event-driven system on Google Cloud Platform (GCP). It consists of several components that work together to scrape, process, store, and visualize TikTok data.
 
-2. **Processing Data**
-   - Parses raw HTML to extract:
-     - Creator info
-     - Video details
-   - Deduplicates using MERGE in BigQuery
+### Components
+1. **Pub/Sub Topic (scrape-tiktok-topic)**:
+   * Acts as the entry point for triggering scrapes
+   * Users publish messages to this topic with TikTok profile URLs (e.g., https://www.tiktok.com/@jasonmoments)
 
-3. **Data Storage**
-   - Raw HTML saved to GCS
-   - Cleaned/structured data loaded into BigQuery
+2. **Cloud Function: scrape_tiktok**:
+   * Triggered by messages in the scrape-tiktok-topic Pub/Sub topic
+   * Uses ScrapingBee to scrape the TikTok profile page and retrieve raw HTML
+   * Saves the raw HTML to a GCS bucket (tiktok-raw-data)
 
-4. **Visualization**
-   - Connected to BigQuery via Looker Studio
+3. **Google Cloud Storage (GCS)**:
+   * **Raw Data Bucket (tiktok-raw-data)**: Stores the raw HTML files scraped by scrape_tiktok
+   * **Processed Data Bucket (tiktok-processed-data)**: Stores the processed JSON files (profile and video data) extracted by process_tiktok_data
+
+4. **Cloud Function: process_tiktok_data**:
+   * Triggered by new files in the tiktok-raw-data bucket (via the google.storage.object.finalize event)
+   * Processes the raw HTML to extract profile and video data using BeautifulSoup and JSON parsing
+   * Saves processed data as JSON files to the tiktok-processed-data bucket
+   * Loads the data into BigQuery using a MERGE operation to avoid duplicates
+
+5. **BigQuery**:
+   * Stores the processed data in two tables:
+      * training-triggering-pipeline.tiktok_dataset.profiles: Contains profile data (e.g., username, follower_count, total_like_count)
+      * training-triggering-pipeline.tiktok_dataset.videos: Contains video data (e.g., url, views, like_count)
+   * Uses MERGE operations to deduplicate data based on username (for profiles) and url (for videos)
+
+6. **Looker Studio**:
+   * Connects to the BigQuery dataset to visualize the data
+   * Provides dashboards with insights like follower counts, verified vs. non-verified creators, and top videos by views
+
+### Data Flow
+1. A user publishes a TikTok profile URL to the scrape-tiktok-topic Pub/Sub topic
+2. The scrape_tiktok Cloud Function is triggered, scrapes the profile using ScrapingBee, and saves the raw HTML to the tiktok-raw-data GCS bucket
+3. The creation of a new file in tiktok-raw-data triggers the process_tiktok_data Cloud Function
+4. process_tiktok_data extracts profile and video data from the HTML, saves the processed data to the tiktok-processed-data bucket, and loads it into BigQuery with deduplication
+5. Looker Studio queries the BigQuery tables to generate visualizations
+
+### Architecture Diagram
+```
++-------------------+     +-------------------+     +-------------------+
+|                   |     |                   |     |                   |
+| Pub/Sub Topic     |---->| scrape_tiktok     |---->| GCS (Raw Data)    |
+| (scrape-tiktok-   |     | Cloud Function    |     | (tiktok-raw-data) |
+| topic)            |     |                   |     |                   |
++-------------------+     +-------------------+     +-------------------+
+                                                     |
+                                                     | Triggers on new file
+                                                     v
++-------------------+     +-------------------+     +-------------------+
+|                   |     |                   |     |                   |
+| process_tiktok_   |<----| GCS (Processed)   |     | BigQuery         |
+| data Cloud        |     | (tiktok-processed-|---->| (profiles, videos)|
+| Function          |     | data)             |     |                   |
++-------------------+     +-------------------+     +-------------------+
+                                                     |
+                                                     | Queries data
+                                                     v
+                                                    +-------------------+
+                                                    |                   |
+                                                    | Looker Studio     |
+                                                    | Dashboard         |
+                                                    |                   |
+                                                    +-------------------+
+```
 
 ## 📊 Looker Studio Dashboard Insights
 Access the full dashboard here: [TikTok Analytics Dashboard](https://lookerstudio.google.com/u/0/reporting/cff2d309-6362-4599-8962-43c3370a69d0/page/9doFF/edit)
@@ -199,4 +249,4 @@ Open [Looker Studio Dashboard](https://lookerstudio.google.com/u/0/reporting/cff
 ## 🧠 Credits
 Built with ❤️ using Python, BeautifulSoup, and Google Cloud
 
-Author: Levan Dalbashvili
+Special thanks to ScrapingBee for reliable scraping infrastructure
