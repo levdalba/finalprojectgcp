@@ -19,7 +19,7 @@ def scrape_tiktok(cloud_event):
         logger.info(f"Scraping profile: {profile_url}")
 
         # Use ScrapingBee to fetch the page
-        scrapingbee_api_key ="TSUO2QQMLZEDIXGZCM2P31DGAGT3YST24ZC91GK85HQAG4DHQTFRWMJMOLF13A7AMHXLY69WLNFFNXSV"
+        scrapingbee_api_key = os.environ.get("SCRAPINGBEE_API_KEY")
         if not scrapingbee_api_key:
             raise ValueError("SCRAPINGBEE_API_KEY environment variable not set")
         scrapingbee_url = "https://app.scrapingbee.com/api/v1/"
