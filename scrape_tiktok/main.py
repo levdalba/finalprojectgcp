@@ -1,44 +1,83 @@
 import functions_framework
-from google.cloud import storage
 import requests
-import base64
+import os
+from google.cloud import storage
 import logging
-import time
+import base64
+import json
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# Use the correct ScrapingBee API Key
+SCRAPINGBEE_API_KEY = "TSUO2QQMLZEDIXGZCM2P31DGAGT3YST24ZC91GK85HQAG4DHQTFRWMJMOLF13A7AMHXLY69WLNFFNXSV"
+
+def scrape_with_scrapingbee(url):
+    """Scrape a URL using ScrapingBee."""
+    # Define the JavaScript scenario to scroll and wait
+    js_scenario = {
+        "instructions": [
+            {"scroll_y": 1000},
+            {"wait": 1000},
+            {"scroll_y": 1000}
+        ]
+    }
+    
+    scrapingbee_url = (
+        "https://app.scrapingbee.com/api/v1/"
+        f"?api_key={SCRAPINGBEE_API_KEY}"
+        f"&url={url}"
+        "&render_js=True"
+        "&block_resources=False"
+        "&wait=15000"  # Keep a 15-second wait for stability
+        "&premium_proxy=True"
+        "&js_scenario=" + json.dumps(js_scenario).replace(" ", "")
+    )
+    logger.info(f"Sending request to ScrapingBee with URL: {scrapingbee_url}")
+    try:
+        response = requests.get(scrapingbee_url)
+        response.raise_for_status()
+        logger.info("Successfully fetched page using ScrapingBee.")
+        return response.text
+    except requests.RequestException as e:
+        logger.error(f"ScrapingBee request failed: {e}")
+        raise
+
 @functions_framework.cloud_event
 def scrape_tiktok(cloud_event):
+    """Cloud Function to scrape TikTok profiles and save HTML to GCS."""
     try:
-        data = cloud_event.data["message"]["data"]
-        profile_url = base64.b64decode(data).decode("utf-8")
-        logger.info(f"Scraping profile: {profile_url}")
+        # Extract the URL from the Pub/Sub message
+        pubsub_message = cloud_event.data["message"]
+        if "data" not in pubsub_message:
+            raise ValueError("No data in Pub/Sub message")
+        
+        url = base64.b64decode(pubsub_message["data"]).decode("utf-8")
+        logger.info(f"Received URL to scrape: {url}")
 
-        scrapingbee_api_key = "NWGZSCRRH5CM26REU9Q1AEQGHWJH17FYPI4UCW3FU5F3KB9W7S5PXDMK334L8JMHFBS8QLN3PD3HZIP1"
-        scrapingbee_url = "https://app.scrapingbee.com/api/v1/"
-        scroll_script = "window.scrollTo(0,document.body.scrollHeight);"
-        scroll_script_b64 = base64.b64encode(scroll_script.encode("utf-8")).decode("utf-8")
-        params = {
-            "api_key": scrapingbee_api_key,
-            "url": profile_url,
-            "render_js": "true",
-            "wait": "5000",
-            "js_snippet": scroll_script_b64,
-        }
-        response = requests.get(scrapingbee_url, params=params)
-        response.raise_for_status()
-        html_content = response.text
-        logger.info("Successfully fetched page using ScrapingBee with scrolling.")
+        # Validate URL
+        if not url.startswith("https://www.tiktok.com/@"):
+            raise ValueError(f"Invalid TikTok URL: {url}")
 
+        # Extract username from URL
+        username = url.split("@")[1].split("?")[0] if "?" in url else url.split("@")[1]
+        logger.info(f"Extracted username: {username}")
+
+        # Scrape the page
+        html_content = scrape_with_scrapingbee(url)
+        logger.info(f"Scraped HTML content, length: {len(html_content)} characters")
+
+        # Upload to GCS
         storage_client = storage.Client()
-        bucket = storage_client.bucket("tiktok-raw-data")
-        timestamp = time.strftime("%Y%m%d-%H%M%S")
-        username = profile_url.split('@')[-1]
-        blob_path = f"profiles/{username}/{timestamp}.html"
+        bucket_name = "tiktok-raw-data"
+        bucket = storage_client.bucket(bucket_name)
+        blob_path = f"profiles/{username}/{username}.html"
         blob = bucket.blob(blob_path)
         blob.upload_from_string(html_content, content_type="text/html")
-        logger.info(f"Saved raw HTML to gs://tiktok-raw-data/{blob_path}")
+        logger.info(f"Uploaded HTML to gs://{bucket_name}/{blob_path}")
+
+        return f"Successfully scraped and uploaded {url}"
+
     except Exception as e:
-        logger.error(f"Error in scrape_tiktok: {str(e)}")
+        logger.error(f"Error in scrape_tiktok: {e}")
         raise
