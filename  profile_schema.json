@@ -1,0 +1,14 @@
+[
+  {"name": "username", "type": "STRING", "mode": "NULLABLE"},
+  {"name": "user_id", "type": "STRING", "mode": "NULLABLE"},
+  {"name": "actual_name", "type": "STRING", "mode": "NULLABLE"},
+  {"name": "following_count", "type": "INTEGER", "mode": "NULLABLE"},
+  {"name": "follower_count", "type": "INTEGER", "mode": "NULLABLE"},
+  {"name": "total_like_count", "type": "INTEGER", "mode": "NULLABLE"},
+  {"name": "caption", "type": "STRING", "mode": "NULLABLE"},
+  {"name": "bio_link", "type": "STRING", "mode": "NULLABLE"},
+  {"name": "bio", "type": "STRING", "mode": "NULLABLE"},
+  {"name": "profile_pic_url", "type": "STRING", "mode": "NULLABLE"},
+  {"name": "is_verified", "type": "BOOLEAN", "mode": "NULLABLE"},
+  {"name": "scrape_timestamp", "type": "TIMESTAMP", "mode": "NULLABLE"}
+]
